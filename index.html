@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <title>相関図作成ツール</title>
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <h1>相関図作成ツール</h1>
+
+    <div class="layout">
+      <!-- 左ペイン：設定＆描画 -->
+      <div class="card">
+        <div class="toolbar-col">
+          <div class="toolbar">
+            <button id="listToggleBtn">人物リストの編集</button>
+            <button id="groupToggleBtn">グループリストを編集</button>
+          </div>
+          <div class="toolbar">
+            <button id="importBtn" class="ghost mini">リストのインポート</button>
+            <button id="exportBtn" class="ghost mini">リストのエクスポート</button>
+          </div>
+          <div class="toolbar">
+            <button id="autogenBtn" class="mini">自動生成</button>
+            <button id="autogenSettingsBtn" class="ghost mini">自動生成の設定</button>
+          </div>
+        </div>
+
+        <div class="section-title" style="margin-top: 16px">設定</div>
+
+        <!-- メイン：幅・高さだけ -->
+        <div class="settings">
+          <div>
+            <label for="canvasW">キャンバス幅</label>
+            <input
+              id="canvasW"
+              type="number"
+              min="400"
+              max="2000"
+              step="10"
+              value="1000"
+            />
+          </div>
+          <div>
+            <label for="canvasH">キャンバス高さ</label>
+            <input
+              id="canvasH"
+              type="number"
+              min="300"
+              max="2000"
+              step="10"
+              value="600"
+            />
+          </div>
+          <div>
+            <label for="dashedThreshold">点線にする親密度</label>
+            <input
+              id="dashedThreshold"
+              type="number"
+              min="0"
+              max="10"
+              step="0.05"
+              value="0.7"
+            />
+          </div>
+          <div>
+            <label for="idealEdgeLen">ノード間距離</label>
+            <input
+              id="idealEdgeLen"
+              type="number"
+              min="50"
+              max="1000"
+              step="10"
+              value="240"
+            />
+          </div>
+        </div>
+
+        <!-- 詳細設定トグルボタン -->
+        <div class="toolbar">
+          <button id="advancedToggleBtn" class="ghost mini">詳細設定</button>
+        </div>
+
+        <!-- 詳細設定：最初は非表示 -->
+        <div
+          id="advancedSettings"
+          class="settings"
+          style="margin-top: 8px; display: none"
+        >
+          <div>
+            <label for="iterations">反復回数</label>
+            <input
+              id="iterations"
+              type="number"
+              min="50"
+              max="5000"
+              step="50"
+              value="500"
+            />
+          </div>
+          <div>
+            <label for="generationCount">生成回数</label>
+            <input
+              id="generationCount"
+              type="number"
+              min="1"
+              max="30"
+              step="1"
+              value="10"
+            />
+          </div>
+        </div>
+        <div class="toolbar" style="margin-top: 16px">
+          <button id="saveBtn">画像を保存</button>
+          <span id="status"></span>
+        </div>
+      </div>
+
+      <!-- 右ペイン：キャンバス -->
+      <div class="card">
+        <div class="result-header">
+          <div class="section-title">結果</div>
+          <div id="edgeStats" class="edge-stats">
+            実線: 0 実線+点線: 0 実線率: 0 実線+点線率: 0
+          </div>
+        </div>
+        <canvas id="graphCanvas" width="1000" height="600"></canvas>
+      </div>
+    </div>
+
+    <!-- ダイアログ：人の追加・リスト & 仲良し設定 -->
+    <div id="listOverlay" class="overlay">
+      <div class="modal">
+        <div class="modal-header">
+          <div class="modal-header-left">
+            <span>人物リスト</span>
+            <span id="dialogStatus" class="dialog-status"></span>
+          </div>
+          <button id="listCloseBtn" class="modal-close-btn">✕</button>
+        </div>
+        <div class="modal-body">
+          <div class="modal-split">
+            <!-- 左：追加 + リスト -->
+            <div class="modal-left">
+              <div class="section-title" style="margin-top: 0">人物を追加</div>
+              <div class="row">
+                <input id="nameInput" type="text" placeholder="名前" />
+                <button id="addBtn">追加</button>
+              </div>
+
+              <div class="section-title" style="margin-top: 12px">
+                人物のリスト
+                <span
+                  id="peopleCount"
+                  style="
+                    font-weight: normal;
+                    font-size: 12px;
+                    color: var(--muted);
+                  "
+                ></span>
+              </div>
+              <div id="peopleList" class="hint">（まだ人物がいません）</div>
+            </div>
+
+            <!-- 右：仲良い人の設定 -->
+            <div class="modal-right">
+              <div class="section-title" style="margin-top: 0">
+                仲良い人の設定
+              </div>
+              <div id="friendsPanel"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ★ 追加：グループ編集ダイアログ -->
+    <div id="groupOverlay" class="overlay">
+      <div class="modal">
+        <div class="modal-header">
+          <span>グループの設定</span>
+          <button id="groupCloseBtn" class="modal-close-btn">✕</button>
+        </div>
+        <div class="modal-body">
+          <div class="modal-split">
+            <!-- 左：グループ一覧 -->
+            <div class="modal-left">
+              <div class="section-title" style="margin-top: 0">
+                グループ一覧
+              </div>
+              <div class="toolbar" style="margin-top: 4px">
+                <button id="addGroupBtn">グループを追加</button>
+              </div>
+              <div id="groupList" class="hint">
+                （まだグループがありません）
+              </div>
+            </div>
+
+            <!-- 右：グループ設定 -->
+            <div class="modal-right">
+              <div class="section-title" style="margin-top: 0">
+                グループの設定
+              </div>
+              <div id="groupSettingsPanel" class="hint">
+                左のグループ一覧から選択してください。
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ★ 追加：削除確認ダイアログ -->
+    <div id="confirmOverlay" class="overlay">
+      <div class="modal confirm-modal">
+        <div class="modal-header">
+          <span>確認</span>
+          <button id="confirmCloseBtn" class="modal-close-btn">✕</button>
+        </div>
+        <div class="modal-body">
+          <div id="confirmMessage" class="confirm-message"></div>
+        </div>
+        <div class="modal-footer">
+          <div class="confirm-buttons">
+            <button id="confirmCancelBtn" class="ghost">キャンセル</button>
+            <button id="confirmOkBtn"></button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ★ 追加：自動生成設定ダイアログ -->
+    <div id="autogenSettingsOverlay" class="overlay">
+      <div class="modal autogen-modal">
+        <div class="modal-header">
+          <span>自動生成の設定</span>
+          <button id="autogenSettingsCloseBtn" class="modal-close-btn">✕</button>
+        </div>
+        <div class="modal-body">
+          <!-- JS でここに設定項目のHTMLを自動生成する -->
+          <div id="autogenSettingsBody"></div>
+        </div>
+        <div class="modal-footer">
+          <button id="autogenSettingsResetBtn" class="ghost mini">デフォルトに戻す</button>
+        </div>
+      </div>
+    </div>
+
+    <input
+      type="file"
+      id="importFileInput"
+      accept="application/json"
+      style="display:none"
+    />
+
+    <script src="utils.js"></script>
+    <script src="state.js"></script>
+    <script src="view.js"></script>
+    <script src="autogen.js"></script>
+    <script src="logic.js"></script>
+    <script src="main.js"></script>
+  </body>
+</html>
